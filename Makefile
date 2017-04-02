@@ -16,11 +16,12 @@ TOOL_CC := $(CC_PATH)/arm-linux-gnueabihf-gcc
 NEW_PATH := $(CC_PATH):$(PATH)
 export PATH = $(NEW_PATH)
 
+MODULE_TEMP := temp.modules
+HEADER_TEMP := temp.headers
+BOOT_TEMP := temp.boot
+
 .PHONY: tools
 tools: $(TOOL_CC)
-
-test:
-	echo $(TOOL_CC)
 
 $(TOOL_CC):
 	if [ -d $@ ]; then \
@@ -33,38 +34,39 @@ $(SRC_FOLDER)/Makefile:
 	if [ -d $@ ]; then \
 		cd $@ && rm -rf * .git; \
 	fi
-	git clone $(SRC_REPO) $@ --branch $(SRC_TAG) --depth 1
+	git clone $(SRC_REPO) $(dir $@) --branch $(SRC_TAG) --depth 1
 
 $(SRC_FOLDER)/.config: $(KERNEL_CONFIG) $(SRC_FOLDER)/Makefile
 	cp $< $@
 
+.PHONY: save
 save: $(SRC_FOLDER)/.config
 	cp $< $(KERNEL_CONFIG)
 
+.PHONY: build
 build: _build.done
 _build.done: $(SRC_FOLDER)/.config $(TOOL_CC)
 	$(CROSS_MAKE) zImage modules dtbs -j$(NCPUS)
 	touch _build.done
 
-scripts : $(SRC_FOLDER)
-	$(CROSS_MAKE) scripts
-
-clean: $(SRC_FOLDER)
-	$(CROSS_MAKE) clean
+clean:
+	if [ -e $(SRC_FOLDER)/Makefile ]; then \
+		$(CROSS_MAKE) clean; \
+	fi
 	rm -rf install.sh src.tar.gz modules.tar.gz boot.tar.gz
+	rm -rf $(MODULE_TEMP)
+	rm -rf $(HEADER_TEMP)
+	rm -rf $(BOOT_TEMP)
 
-menuconfig: $(SRC_FOLDER)/.config
-	$(CROSS_MAKE) menuconfig
+xconfig menuconfig nconfig: $(SRC_FOLDER)/.config
+	$(CROSS_MAKE) $@
 	cp $(SRC_FOLDER)/.config $(KERNEL_CONFIG)
 	touch -c $(SRC_FOLDER)/.config $(KERNEL_CONFIG)
 
-distclean:
-	$(CROSS_MAKE) distclean
-	rm -rf install.sh src.tar.gz modules.tar.gz boot.tar.gz
-
-MODULE_TEMP := temp.modules
-HEADER_TEMP := temp.headers
-BOOT_TEMP := temp.boot
+distclean: clean
+	if [ -e $(SRC_FOLDER)/Makefile ]; then \
+		$(CROSS_MAKE) distclean; \
+	fi
 
 install.sh: install.sh.template _build.done
 	RELEASE=$$(cat $(SRC_FOLDER)/include/config/kernel.release) && \
