@@ -1,0 +1,27 @@
+#!/bin/bash
+set -euo pipefail
+
+RELEASE="%RELEASE_STRING%"
+INSTALL_DIR="/"
+CONFIG_FILE="/boot/config.txt"
+
+if [ ! -d "$INSTALL_DIR" ]; then
+    mkdir -p "$INSTALL_DIR"
+fi
+
+echo "Extracting kernel sources (this could take a while)..."
+tar zxf src.tar.gz -C "$INSTALL_DIR" --totals
+echo "Done."
+
+echo "Extracting kernel modules..."
+tar zxf modules.tar.gz -C "$INSTALL_DIR" --totals
+echo "Done."
+
+echo "Extracting kernel and overlays..."
+tar zxf boot.tar.gz -C "$INSTALL_DIR" --totals
+echo "Done."
+
+echo "Updating boot config in $CONFIG_FILE..."
+sed -ri '/^kernel[=]/d' "$CONFIG_FILE"
+echo "kernel=kernel-$RELEASE.img" | tee -a "$CONFIG_FILE"
+echo "Done."
