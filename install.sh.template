@@ -5,12 +5,19 @@ RELEASE="%RELEASE_STRING%"
 INSTALL_DIR="/"
 CONFIG_FILE="/boot/config.txt"
 
+SRC_DIR="/usr/src/linux-headers-$RELEASE"
+CORES=$(grep -c ^processor /proc/cpuinfo)
+
 if [ ! -d "$INSTALL_DIR" ]; then
     mkdir -p "$INSTALL_DIR"
 fi
 
 echo "Extracting kernel sources (this could take a while)..."
 tar zxf src.tar.gz -C "$INSTALL_DIR" --totals
+echo "Done."
+
+echo "Regenerating 'scripts' folder..."
+make -C $SRC_DIR scripts -j $CORES
 echo "Done."
 
 echo "Extracting kernel modules..."

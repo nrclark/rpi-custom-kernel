@@ -46,8 +46,12 @@ _build.done: $(SRC_FOLDER)/.config $(TOOL_CC)
 	$(CROSS_MAKE) zImage modules dtbs -j$(NCPUS)
 	touch _build.done
 
+scripts : $(SRC_FOLDER)
+	$(CROSS_MAKE) scripts
+
 clean: $(SRC_FOLDER)
 	$(CROSS_MAKE) clean
+	rm -rf install.sh src.tar.gz modules.tar.gz boot.tar.gz
 
 menuconfig: $(SRC_FOLDER)/.config
 	$(CROSS_MAKE) menuconfig
@@ -56,6 +60,7 @@ menuconfig: $(SRC_FOLDER)/.config
 
 distclean:
 	$(CROSS_MAKE) distclean
+	rm -rf install.sh src.tar.gz modules.tar.gz boot.tar.gz
 
 MODULE_TEMP := temp.modules
 HEADER_TEMP := temp.headers
@@ -66,30 +71,11 @@ install.sh: install.sh.template _build.done
 	sed "s/%RELEASE_STRING%/$$RELEASE/g" $< > $@
 	chmod 755 $@
 
-newinstall: install.sh src.tar.gz modules.tar.gz boot.tar.gz
+install: install.sh src.tar.gz modules.tar.gz boot.tar.gz
 	TEMPDIR=$$(ssh $(SSH_USER)@$(SSH_HOST) mktemp -d) && \
 	scp $^ $(SSH_USER)@$(SSH_HOST):$$TEMPDIR && \
 	ssh $(SSH_USER)@$(SSH_HOST) "cd $$TEMPDIR && sudo ./install.sh" && \
 	ssh $(SSH_USER)@$(SSH_HOST) "rm -rf $$TEMPDIR"
-
-install: _build.done
-	mkdir -p $(MODULE_TEMP)
-	rm -rf $(MODULE_TEMP)/*
-	$(CROSS_MAKE) INSTALL_MOD_PATH=$(abspath $(MODULE_TEMP)) modules_install
-	RELEASE=$$(cat $(SRC_FOLDER)/include/config/kernel.release) && \
-	TEMPDIR=$$(ssh $(SSH_USER)@$(SSH_HOST) mktemp -d) && \
-			ssh $(SSH_USER)@$(SSH_HOST) mkdir -p $$TEMPDIR/boot && \
-			ssh $(SSH_USER)@$(SSH_HOST) mkdir -p $$TEMPDIR/boot && \
-			ssh $(SSH_USER)@$(SSH_HOST) mkdir -p $$TEMPDIR/boot/overlays && \
-			rsync -avh --progress $(SRC_FOLDER)/arch/arm/boot/zImage $(SSH_USER)@$(SSH_HOST):$$TEMPDIR/boot/kernel-$$RELEASE.img && \
-			rsync -avh --progress $(SRC_FOLDER)/arch/arm/boot/dts/*.dtb $(SSH_USER)@$(SSH_HOST):$$TEMPDIR/boot && \
-			rsync -avh --progress $(SRC_FOLDER)/arch/arm/boot/dts/overlays/*.dtb* $(SSH_USER)@$(SSH_HOST):$$TEMPDIR/boot/overlays && \
-			rsync -avh --progress $(SRC_FOLDER)/arch/arm/boot/dts/overlays/README $(SSH_USER)@$(SSH_HOST):$$TEMPDIR/boot/overlays && \
-			rsync -avh --progress $(MODULE_TEMP)/* $(SSH_USER)@$(SSH_HOST):$$TEMPDIR && \
-			ssh $(SSH_USER)@$(SSH_HOST) sudo cp -r $$TEMPDIR/* / && \
-			ssh $(SSH_USER)@$(SSH_HOST) rm -rf $$TEMPDIR && \
-			ssh $(SSH_USER)@$(SSH_HOST) sudo sed -ri '/^kernel[=]/d' /boot/config.txt && \
-			ssh $(SSH_USER)@$(SSH_HOST) "echo 'kernel=kernel-$$RELEASE.img' | sudo tee -a /boot/config.txt"
 
 src.tar.gz: _build.done
 	RELEASE=$$(cat $(SRC_FOLDER)/include/config/kernel.release) && \
