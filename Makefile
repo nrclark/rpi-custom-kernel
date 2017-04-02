@@ -1,12 +1,17 @@
 SRC_FOLDER := linux
 TOOL_FOLDER := tools/compiler
-KERNEL_CONFIG := kernel_config
+KERNEL_CONFIG := kernel-4.10.8_config
 SSH_USER := pi
 SSH_HOST := donk
 
 TOOL_REPO := https://github.com/raspberrypi/tools
 SRC_REPO := https://github.com/raspberrypi/linux
-SRC_TAG := raspberrypi-kernel_1.20170303-1
+
+# At the time of this writing, the most recently-released stable kernel is tagged
+# 'raspberrypi-kernel_1.20170303-1' in the Pi's kernel repo. SRC_TAG can be given a
+# branch name, commit SHA, or a particular tag.
+
+SRC_TAG := rpi-4.10.y
 
 CROSS_MAKE := KERNEL=kernel7 $(MAKE) -C $(SRC_FOLDER) ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
 NCPUS := $(shell grep -c ^processor /proc/cpuinfo)
@@ -58,7 +63,11 @@ clean:
 	rm -rf $(HEADER_TEMP)
 	rm -rf $(BOOT_TEMP)
 
-xconfig menuconfig nconfig: $(SRC_FOLDER)/.config
+defconfig:
+	$(CROSS_MAKE) bcm2709_defconfig
+	cp $(SRC_FOLDER)/.config $(KERNEL_CONFIG)
+
+xconfig menuconfig nconfig oldconfig: $(SRC_FOLDER)/.config
 	$(CROSS_MAKE) $@
 	cp $(SRC_FOLDER)/.config $(KERNEL_CONFIG)
 	touch -c $(SRC_FOLDER)/.config $(KERNEL_CONFIG)
