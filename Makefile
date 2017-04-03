@@ -58,7 +58,8 @@ clean:
 	if [ -e $(SRC_FOLDER)/Makefile ]; then \
 		$(CROSS_MAKE) clean; \
 	fi
-	rm -rf install.sh src.tar.gz modules.tar.gz boot.tar.gz
+	rm -f install.sh src.tar.gz modules.tar.gz boot.tar.gz
+	rm -f _build.done fileset.txt
 	rm -rf $(MODULE_TEMP)
 	rm -rf $(HEADER_TEMP)
 	rm -rf $(BOOT_TEMP)
@@ -82,20 +83,13 @@ install.sh: install.sh.template _build.done
 	sed "s/%RELEASE_STRING%/$$RELEASE/g" $< > $@
 	chmod 755 $@
 
+prep: install.sh src.tar.gz modules.tar.gz boot.tar.gz
+
 install: install.sh src.tar.gz modules.tar.gz boot.tar.gz
 	TEMPDIR=$$(ssh $(SSH_USER)@$(SSH_HOST) mktemp -d) && \
 	scp $^ $(SSH_USER)@$(SSH_HOST):$$TEMPDIR && \
 	ssh $(SSH_USER)@$(SSH_HOST) "cd $$TEMPDIR && sudo ./install.sh" && \
 	ssh $(SSH_USER)@$(SSH_HOST) "rm -rf $$TEMPDIR"
-
-src.tar.gz: _build.done
-	RELEASE=$$(cat $(SRC_FOLDER)/include/config/kernel.release) && \
-	tar \
-		--exclude='$(SRC_FOLDER)/.git' \
-		-zcf $@ $(SRC_FOLDER) \
-		--transform="s,^$(SRC_FOLDER),/usr/src/linux-headers-$$RELEASE,S" \
-		--group=0 \
-		--owner=0
 
 modules.tar.gz: _build.done
 	mkdir -p $(MODULE_TEMP)
@@ -109,6 +103,26 @@ modules.tar.gz: _build.done
 	tar \
 		-zcf $@ $(MODULE_TEMP) \
 		--transform="s,^$(MODULE_TEMP),,S" \
+		--group=0 \
+		--owner=0
+
+fileset.txt: _build.done
+	rm -f fileset.txt*
+	find $(SRC_FOLDER) -type f | grep -Pv "[.]git" | grep -Pv "[.]tmp_versions" > fileset.txt.1
+	cat fileset.txt.1 | tr '\n' '\00' | xargs -0 -n8 -P4 file > fileset.txt.2
+	grep "ELF" fileset.txt.2 > fileset.txt.elf.3
+	grep -v "ELF" fileset.txt.2 > fileset.txt.noelf.3
+	grep "/scripts/" fileset.txt.elf.3 | grep -v "x86" > fileset.txt.4
+	cat fileset.txt.noelf.3 >> fileset.txt.4
+	cat fileset.txt.4 | sed -r 's@^$(SRC_FOLDER)/@@g' | sed -r 's/[:].*//g' > $@
+	rm -f fileset.txt.*
+
+src.tar.gz: fileset.txt
+	RELEASE=$$(cat $(SRC_FOLDER)/include/config/kernel.release) && \
+	cd $(SRC_FOLDER) && \
+	tar zcf $(abspath $@) \
+		-T $(abspath $<) \
+		--transform="s,^,/usr/src/linux-headers-$$RELEASE/,S" \
 		--group=0 \
 		--owner=0
 
@@ -129,3 +143,6 @@ boot.tar.gz: _build.done
 
 lxterminal:
 	nohup ssh -X $(SSH_USER)@$(SSH_HOST) lxterminal 1>/dev/null 2>&1 &
+
+reboot:
+	ssh $(SSH_USER)@$(SSH_HOST) sudo reboot || true
